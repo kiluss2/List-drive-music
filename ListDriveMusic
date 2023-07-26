@@ -1,0 +1,125 @@
+function onOpen() {
+  var SS = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('List Files/Folders')
+    .addItem('List All Folders', 'listFilesAndFolders')
+    .addToUi();
+};
+
+function listFilesAndFolders() {
+  var folderId = Browser.inputBox('Enter folder ID', Browser.Buttons.OK_CANCEL);
+  if (folderId === "") {
+    Browser.msgBox('Folder ID is invalid');
+    return;
+  }
+  getFolderTree(folderId, true);
+};
+
+// Get Folder Tree
+function getFolderTree(folderId, listAll) {
+  try {
+    // Get folder by id
+    var parentFolder = DriveApp.getFolderById(folderId);
+
+    // Initialise the sheet
+    var file, data, sheet = SpreadsheetApp.getActiveSheet();
+    sheet.clear();
+    const columnTitleRow = ["FULL PATH", "NAME", "TYPE", "DATE", "URL", "LAST UPDATED", "SIZE", "OWNER EMAIL", "DESCRIPTION"];
+    sheet.appendRow(columnTitleRow);
+    sheet.getRange(sheet.getLastRow(), 1, sheet.getLastRow(), sheet.getLastColumn()).setFontWeight("bold");
+    sheet.setColumnWidths(1, sheet.getLastColumn(), 150);
+    sheet.setColumnWidths(1, 2, 300);
+    sheet.setColumnWidths(4, 2, 130);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, 9).setHorizontalAlignment("center");
+
+    // Get files and folders
+    getChildFolders(parentFolder.getName(), parentFolder, data, sheet, listAll, true);
+  } catch (e) {
+    Logger.log(e.toString());
+  }
+
+  // Finally, sort it
+  sheet.sort(1, true);
+};
+
+// Get the list of files and folders and their metadata in recursive mode
+function getChildFolders(parentName, parent, data, sheet, listAll, firstLevel) {
+  var childFolders = parent.getFolders();
+
+  // List folders inside the folder
+  while (childFolders.hasNext()) {
+    var childFolder = childFolders.next();
+
+    // filter folder contain audio
+    if (containsAudioFiles(childFolder) || firstLevel) {
+      data = [
+        parentName + "/" + childFolder.getName(),
+        childFolder.getName(),
+        "Folder",
+        childFolder.getDateCreated(),
+        childFolder.getUrl(),
+        childFolder.getLastUpdated(),
+        "0 MB",
+        childFolder.getOwner().getEmail(),
+        childFolder.getDescription()
+      ];
+
+      // Write
+      sheet.appendRow(data);
+      sheet.getRange(sheet.getLastRow(), 1, sheet.getLastRow(), 9).setFontWeight("normal");
+      if (firstLevel) {
+        sheet.getRange(sheet.getLastRow(), 1, sheet.getLastRow(), 9).setFontWeight("bold");
+        sheet.autoResizeColumns(3, 1);
+        sheet.autoResizeColumns(6, 3);
+      }
+    }
+
+    // Recursive call of the subfolder
+      getChildFolders(parentName + "/" + childFolder.getName(), childFolder, data, sheet, listAll, false);
+
+    // List files inside zzz other
+    if (childFolder.getName() == "ZZZ Others") {
+      var files = childFolder.getFiles();
+      while (listAll & files.hasNext()) {
+        var childFile = files.next();
+        data = [
+          parentName + "/" + childFolder.getName() + "/" + childFile.getName(),
+          childFile.getName(),
+          childFile.getName().split(".").pop(),
+          childFile.getDateCreated(),
+          childFile.getUrl(),
+          childFile.getLastUpdated(),
+          Utilities.formatString("%0.1f", childFile.getSize() / 1048576) + " MB",
+          childFile.getOwner().getEmail(),
+          childFile.getDescription()
+        ];
+        // Write
+        sheet.appendRow(data);
+        sheet.getRange(sheet.getLastRow(), 1, sheet.getLastRow(), 9).setFontWeight("normal");
+      }
+    }
+  }
+};
+
+function containsAudioFiles(folder) {
+  var audioExtensions = [".mp3", ".wav", ".ogg", ".aac", ".m4a", ".flac", ".pcm", ".wma", ".alac", ".dsd", ".aiff"]; // Add more audio extensions if needed
+  var files = folder.getFiles();
+
+  while (files.hasNext()) {
+    var file = files.next();
+    var fileExtension = getFileExtension(file.getName());
+
+    // Check if the file has an audio extension
+    if (audioExtensions.indexOf(fileExtension.toLowerCase()) !== -1) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getFileExtension(filename) {
+  var dotIndex = filename.lastIndexOf(".");
+  return dotIndex === -1 ? "" : filename.substr(dotIndex);
+}
