@@ -26,7 +26,9 @@ function getFolderTree(folderId, listAll) {
     sheet.clear();
     const columnTitleRow = ["FULL PATH", "NAME", "TYPE", "DATE", "URL", "LAST UPDATED", "SIZE", "OWNER EMAIL", "DESCRIPTION"];
     sheet.appendRow(columnTitleRow);
-    sheet.getRange(sheet.getLastRow(), 1, sheet.getLastRow(), sheet.getLastColumn()).setFontWeight("bold");
+    var firstRow = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+    firstRow.setFontWeight("bold");
+    firstRow.setBackground("#93c47d");
     sheet.setColumnWidths(1, sheet.getLastColumn(), 150);
     sheet.setColumnWidths(1, 2, 300);
     sheet.setColumnWidths(4, 2, 130);
@@ -35,12 +37,12 @@ function getFolderTree(folderId, listAll) {
 
     // Get files and folders
     getChildFolders(parentFolder.getName(), parentFolder, data, sheet, listAll, true);
+
+    // Finally, sort it
+    sheet.sort(1, true);
   } catch (e) {
     Logger.log(e.toString());
   }
-
-  // Finally, sort it
-  sheet.sort(1, true);
 };
 
 // Get the list of files and folders and their metadata in recursive mode
@@ -52,7 +54,14 @@ function getChildFolders(parentName, parent, data, sheet, listAll, firstLevel) {
     var childFolder = childFolders.next();
 
     // filter folder contain audio
-    if (containsAudioFiles(childFolder) || firstLevel) {
+    var isContainAudio = containsAudioFiles(childFolder);
+    if (isContainAudio || firstLevel) {
+      var description = ""
+      if (isContainAudio) {
+        description = "Contain audio"
+      } else {
+        description = childFolder.getDescription()
+      }
       data = [
         parentName + "/" + childFolder.getName(),
         childFolder.getName(),
@@ -62,21 +71,26 @@ function getChildFolders(parentName, parent, data, sheet, listAll, firstLevel) {
         childFolder.getLastUpdated(),
         "0 MB",
         childFolder.getOwner().getEmail(),
-        childFolder.getDescription()
+        description
       ];
 
       // Write
       sheet.appendRow(data);
-      sheet.getRange(sheet.getLastRow(), 1, sheet.getLastRow(), 9).setFontWeight("normal");
+      if (isContainAudio) {
+        sheet.getRange(sheet.getLastRow(), 1, 1, sheet.getLastColumn()).setFontColor("#45818e");
+      }
+
+      var row = sheet.getRange(sheet.getLastRow(), 1, sheet.getLastRow(), 9);
+      row.setFontWeight("normal");
       if (firstLevel) {
-        sheet.getRange(sheet.getLastRow(), 1, sheet.getLastRow(), 9).setFontWeight("bold");
+        row.setFontWeight("bold");
         sheet.autoResizeColumns(3, 1);
         sheet.autoResizeColumns(6, 3);
       }
     }
 
     // Recursive call of the subfolder
-      getChildFolders(parentName + "/" + childFolder.getName(), childFolder, data, sheet, listAll, false);
+    getChildFolders(parentName + "/" + childFolder.getName(), childFolder, data, sheet, listAll, false);
 
     // List files inside zzz other
     if (childFolder.getName() == "ZZZ Others") {
